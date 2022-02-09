@@ -2,4 +2,14 @@
 
 const args = require('minimist')(process.argv.slice(2));
 
-require('../')(args);
+const run = require('../')
+
+run(args)
+  .then(result => {
+    console.log(JSON.stringify(result.output, null, '  '));
+    process.exit(result.code);
+  })
+  .catch(error => {
+    console.error(error.stack);
+    process.exit(1)
+  });
