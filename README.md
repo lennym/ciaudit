@@ -2,6 +2,29 @@
 
 Wrapper for npm audit to allow configurable severity levels and support ignore lists for specific advisories.
 
+## Install
+
+To install into a project:
+
+```
+$ npm install --save-dev @lennym/ciaudit
+```
+
+If installed in a project then the recommended usage is to add a line to the `scripts` section of package.json:
+
+```
+"scripts": {
+  ...
+  "audit": "ciaudit"
+}
+```
+
+and then run:
+
+```
+$ npm run audit
+```
+
 ## Basic usage
 
 Define a base severity level by passing a flag of `--low`, `--moderate`, `--high` or `--critical`. Default: `low`
