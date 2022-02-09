@@ -1,91 +1,119 @@
+const Arborist = require('@npmcli/arborist');
+const { flatten } = require('lodash');
+const minimatch = require('minimatch');
 const { spawn } = require('child_process');
+const normaliseOptions = require('./lib/options');
+const levels = require('./lib/levels');
 
-const levels = ['low', 'moderate', 'high', 'critical'];
+const runLocalAudit = async settings => {
 
-const audit = options => {
+  const result = [];
+  const args = ['audit', '--json'];
 
-  options.retryCount = options.retryCount || 1;
-  options.retries = options.retries || 1;
-  options.wait = options.wait || 1000;
-
-  const baseLevel = options.level || 'high';
-
-  if (levels.indexOf(baseLevel) === -1) {
-    console.error(`Invalid argument --level: ${baseLevel}`);
-    console.error(` --level should be one of ${levels.join(', ')}`);
+  if (settings.production) {
+    args.push('--production');
   }
 
-  const restart = e => {
-    if (options.retries === 1) {
-      throw e;
-    }
-    if (options.retryCount < options.retries) {
-      console.log(`Retrying... attempt ${options.retryCount + 1} of ${options.retries}`);
-      return setTimeout(() => audit({
-        ...options,
-        retryCount: options.retryCount + 1
-      }), options.wait);
-    }
-    throw new Error('Retry count exceeded. Exiting...');
-  };
-
-  const exec = () => {
-    const result = new Promise((resolve, reject) => {
-      let response = '';
-      const proc = spawn('npm', ['audit', '--json']);
-
-      proc.stdout.on('data', chunk => {
-        response += chunk;
-      });
-
-      proc.on('error', reject);
-      proc.on('close', () => resolve(response));
+  return new Promise(resolve, reject => {
+    const proc = spawn('npm', args);
+    proc.stdout.on('data', chunk => result.push(chunk));
+    proc.on('error', reject);
+    proc.on('end', () => {
+      const json = Buffer.concat(result).toString();
+      resolve(JSON.parse(json));
     });
+  });
+};
 
-    return result
-      .then(response => {
-        try {
-          return JSON.parse(response);
-        } catch (e) {
-          return restart(e);
-        }
-      });
+const runAudit = async settings => {
+  if (settings.local) {
+    return runLocalAudit(settings);
+  }
+  const omit = [];
+  if (settings.production) {
+    omit.push('dev');
+  }
+  const arb = new Arborist({ path: process.cwd(), omit });
+  const result = await arb.audit();
+  return result.toJSON();
+};
+
+const ignoreMatch = (item, { name = '', source = '', path = '' }) => {
+  if (item.includes('&&')) {
+    return item
+      .split('&&')
+      .map(s => s.trim())
+      .every(part => ignoreMatch(part, { name, source, path }));
+  }
+  if (name === item) {
+    return true;
+  }
+  if (source.toString() === item) {
+    return true;
+  }
+  return minimatch(path, item);
+};
+
+const isIgnored = (vuln, settings) => {
+  const baseLevel = levels.indexOf(settings.level);
+  const level = levels.indexOf(vuln.severity);
+
+  if (level < baseLevel) {
+    return true;
+  }
+  if (vuln.paths.length) {
+    return vuln.paths.every(path => settings.ignore.some(item => ignoreMatch(item, { ...vuln, path })));
+  }
+  return settings.ignore.some(item => ignoreMatch(item, { vuln }));
+};
+
+const evaluate = async (report, settings) => {
+  if (report.auditReportVersion !== 2) {
+    throw Error(`Unsupported npm audit version`);
+  }
+  const vulns = report.vulnerabilities;
+  const results = [];
+
+  const buildPaths = (vuln) => {
+    if (vuln.isDirect || !vuln.effects.length) {
+      return [vuln.name];
+    }
+    const paths = flatten(vuln.effects.map(dep => buildPaths(vulns[dep])));
+    return paths.map(p => `${p}>${vuln.name}`);
   };
 
-  const parse = json => {
-
-    if (json.error && json.error.code === 'ENOAUDIT') {
-      console.log('Received ENOAUDIT error.');
-      return restart();
-    }
-
-    const vulns = json.metadata.vulnerabilities;
-    const failed = levels.reduce((count, level, i) => {
-      console.log(`${level}: ${' '.repeat(10 - level.length)}${vulns[level]}`);
-      if (i >= levels.indexOf(baseLevel)) {
-        return count + vulns[level];
+  Object.values(vulns).forEach(vuln => {
+    vuln.via.forEach(via => {
+      if (typeof via === 'string') {
+        return;
       }
-      return count;
-    }, 0);
-    console.log();
-    if (failed) {
-      console.error(`${failed} vulnerabilitie(s) of level "${baseLevel}" or above detected.`);
-      process.exit(1);
-    }
-
-  };
-
-  console.log(`Scanning for vulnerabilities...`);
-
-  return Promise.resolve()
-    .then(() => exec())
-    .then(json => parse(json))
-    .then(() => console.log(`No vulnerabilities of level "${baseLevel}" or above detected.`))
-    .catch(e => {
-      console.error(e.message);
-      process.exit(1);
+      const paths = buildPaths(vuln).sort();
+      const result = { ...via, paths };
+      result.ignored = isIgnored(result, settings);
+      results.push(result);
     });
+  });
 
+  const advisories = results.length;
+  const ignored = results.filter(adv => adv.ignored).length;
+  const passed = results.every(adv => adv.ignored);
+
+  return {
+    output: {
+      results,
+      passed,
+      advisories,
+      ignored
+    },
+    code: passed ? 0 : 1
+  };
+};
+
+const audit = async (options = {}) => {
+  const settings = await normaliseOptions(options);
+  const result = await runAudit(settings);
+
+  return evaluate(result, settings);
 };
 
 module.exports = audit;

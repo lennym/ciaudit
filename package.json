@@ -7,8 +7,7 @@
     "ciaudit": "./bin/ciaudit"
   },
   "scripts": {
-    "test": "eslint .",
-    "prepare": "npm test"
+    "test": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -24,10 +23,13 @@
     "access": "public"
   },
   "dependencies": {
-    "minimist": "^1.2.0"
+    "@npmcli/arborist": "^4.3.0",
+    "lodash": "^4.17.21",
+    "minimatch": "^3.0.4",
+    "minimist": "^1.2.5"
   },
   "devDependencies": {
-    "eslint": "^5.2.0",
-    "eslint-config-lennym": "^2.0.1"
+    "eslint": "^8.8.0",
+    "eslint-config-lennym": "^2.3.2"
   }
 }
