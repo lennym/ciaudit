@@ -1,6 +1,6 @@
 {
   "name": "@lennym/ciaudit",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Wrapper for npm audit to allow configurable vlun levels",
   "main": "index.js",
   "bin": {
