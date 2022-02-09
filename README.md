@@ -18,6 +18,9 @@ This process will output a JSON formatted report and will exit with a non-zero e
 ### Other options
 
 * `--production` - ignore dev dependencies when running audit (Default: `false`)
+
+Note: `--production` will be inherited from npm CLI, so if running via an npm script `npm run audit --production` will be equivalent to `npm run audit -- --production`
+
 * `--ignorefile` - use specified file to load ignore list (Default: `./.auditignore`)
 
 By default an installed version of `@npmcli/arborist` is used to perform the audit, and so is not dependent on the locally installed npm runtime. However, this can be overridden by passing a `--local` flag.
@@ -55,3 +58,9 @@ In the following example, advisory 1006947 (related to the `glob-parent` module)
 ### Note on path matching
 
 Due to [a bug in `npm`](https://github.com/npm/cli/issues/4366) at time of writing, some reported install paths may be incomplete and not include a complete set of ancestor dependencies where a module with an advisory has multiple install paths with a common ancestor.
+
+## Updating from v1.x
+
+v2.0.0 is a total ground-up rewrite of the module to solve a different set of problems that have emerged as `npm audit` has developed and matured.
+
+As such it should be considered a complete breaking change, and a from-scratch reimplementation is recommended.
