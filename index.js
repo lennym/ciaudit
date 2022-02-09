@@ -14,7 +14,7 @@ const runLocalAudit = async settings => {
     args.push('--production');
   }
 
-  return new Promise(resolve, reject => {
+  return new Promise((resolve, reject) => {
     const proc = spawn('npm', args);
     proc.stdout.on('data', chunk => result.push(chunk));
     proc.on('error', reject);
